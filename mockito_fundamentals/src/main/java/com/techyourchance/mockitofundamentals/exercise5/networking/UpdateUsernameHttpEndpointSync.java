@@ -35,8 +35,9 @@ public interface UpdateUsernameHttpEndpointSync {
             return mUserId;
         }
 
+        // this method previously returned mUserId;
         public String getUsername() {
-            return mUserId;
+            return mUsername;
         }
     }
 }

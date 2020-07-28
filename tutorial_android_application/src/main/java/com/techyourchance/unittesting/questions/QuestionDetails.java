@@ -33,9 +33,9 @@ public class QuestionDetails {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         QuestionDetails that = (QuestionDetails) o;
-        return Objects.equals(mId, that.mId) &&
-                Objects.equals(mTitle, that.mTitle) &&
-                Objects.equals(mBody, that.mBody);
+        return mId.equals(that.mId) &&
+                mTitle.equals(that.mTitle) &&
+                mBody.equals(that.mBody);
     }
 
     @Override

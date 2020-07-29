@@ -157,7 +157,7 @@ public class QuestionDetailsControllerTest {
         public boolean failure;
 
         public UseCase() {
-            super(null);
+            super(null, null);
         }
 
         @Override

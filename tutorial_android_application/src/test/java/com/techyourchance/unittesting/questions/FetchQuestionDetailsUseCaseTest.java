@@ -1,11 +1,10 @@
 package com.techyourchance.unittesting.questions;
 
-import com.techyourchance.unittesting.networking.StackoverflowApi;
+import com.techyourchance.unittesting.common.time.TimeProvider;
 import com.techyourchance.unittesting.networking.questions.FetchQuestionDetailsEndpoint;
-import com.techyourchance.unittesting.networking.questions.QuestionDetailsResponseSchema;
 import com.techyourchance.unittesting.networking.questions.QuestionSchema;
+import com.techyourchance.unittesting.testdata.QuestionDetailsData;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -13,14 +12,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.mockito.ArgumentCaptor.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FetchQuestionDetailsUseCaseTest {
@@ -37,13 +33,16 @@ public class FetchQuestionDetailsUseCaseTest {
     @Mock
     FetchQuestionDetailsUseCase.Listener listener2;
 
+    @Mock
+    TimeProvider timeProviderMock;
+
     // endregion helper fields
     FetchQuestionDetailsUseCase SUT;
 
     @Before
     public void setup() throws Exception {
         fetchQuestionDetailsEndpointMock = new EndpointMock();
-        SUT = new FetchQuestionDetailsUseCase(fetchQuestionDetailsEndpointMock);
+        SUT = new FetchQuestionDetailsUseCase(fetchQuestionDetailsEndpointMock, timeProviderMock);
     }
 
     @Test
@@ -76,6 +75,50 @@ public class FetchQuestionDetailsUseCaseTest {
         verify(listener2).onQuestionDetailsFetchFailed();
     }
 
+    @Test
+    public void fetchQuestions_success_newDetailsReturnedAfterTimeout() throws Exception {
+        // Arrange
+        ArgumentCaptor<QuestionDetails> ac = ArgumentCaptor.forClass(QuestionDetails.class);
+        success();
+        SUT.registerListener(listener1);
+        SUT.registerListener(listener2);
+        // Act
+        when(timeProviderMock.getCurrentTimestamp()).thenReturn(0l);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+        when(timeProviderMock.getCurrentTimestamp()).thenReturn(10000l);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+        // Assert
+        verify(listener1, times(2)).onQuestionDetailsFetched(ac.capture());
+        verify(listener2, times(2)).onQuestionDetailsFetched(ac.capture());
+        List<QuestionDetails> acList = ac.getAllValues();
+        assertThat(acList.get(0), is(getQuestionDetails()));
+        assertThat(acList.get(1), not(getQuestionDetails()));
+        assertThat(acList.get(2), is(getQuestionDetails()));
+        assertThat(acList.get(3), not(getQuestionDetails()));
+    }
+
+    @Test
+    public void fetchQuestions_success_returnCachedDetailsIfWithinTimeout() throws Exception {
+        // Arrange
+        ArgumentCaptor<QuestionDetails> ac = ArgumentCaptor.forClass(QuestionDetails.class);
+        success();
+        SUT.registerListener(listener1);
+        SUT.registerListener(listener2);
+        // Act
+        when(timeProviderMock.getCurrentTimestamp()).thenReturn(0l);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+        when(timeProviderMock.getCurrentTimestamp()).thenReturn(8000l);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+        // Assert
+        verify(listener1, times(2)).onQuestionDetailsFetched(ac.capture());
+        verify(listener2, times(2)).onQuestionDetailsFetched(ac.capture());
+        List<QuestionDetails> acList = ac.getAllValues();
+        assertThat(acList.get(0), is(getQuestionDetails()));
+        assertThat(acList.get(1), is(getQuestionDetails()));
+        assertThat(acList.get(2), is(getQuestionDetails()));
+        assertThat(acList.get(3), is(getQuestionDetails()));
+    }
+
     // region helper methods
     private QuestionDetails getQuestionDetails() {
         return new QuestionDetails(QUESTION_ID, "title1", "body1");
@@ -94,6 +137,7 @@ public class FetchQuestionDetailsUseCaseTest {
     private class EndpointMock extends FetchQuestionDetailsEndpoint {
 
         public boolean failure;
+        private int calls = 0;
 
         public EndpointMock() {
             super(null);
@@ -101,10 +145,12 @@ public class FetchQuestionDetailsUseCaseTest {
 
         @Override
         public void fetchQuestionDetails(String questionId, Listener listener) {
+            calls++;
             if(failure) {
                 listener.onQuestionDetailsFetchFailed();
             } else {
-                QuestionSchema questionSchema = new QuestionSchema("title1", questionId, "body1");
+                QuestionSchema questionSchema;
+                questionSchema = new QuestionSchema("title" + calls, questionId, "body" + calls);
                 listener.onQuestionDetailsFetched(questionSchema);
             }
         }
